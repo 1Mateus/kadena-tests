@@ -46,21 +46,6 @@ services:
         headerStream: true
         throttling:
           global: 1000
-        onlySyncPact: true
-        validateHashesOnReplay: true
-        p2p:
-          peer:
-            interface: localhost
-            hostaddress:
-              port: 4445
-          private: true
-          ignoreBootstrapNodes: true
-        transactionIndex:
-          enabled: false
-        mempoolP2p:
-          enabled: false
-        cuts:
-          pruneChainDatabase: headers-checked
       logging:
         telemetryBackend:
           enabled: true
@@ -168,11 +153,8 @@ services:
     - -A64M
     - -RTS
     - --header-stream
-    - --prune-chain-database=none
     - --database-directory=/chainweb/db
     - --chainweb-version=${NETWORK:-mainnet01}
-    # - --enable-mining-coordination
-    # - --mining-public-key=${MINER_KEY:?MINER_KEY environment variable not set}
     - --log-level=warn
     - --log-handle=stderr
     - --telemetry-log-handle=stderr
@@ -193,32 +175,6 @@ services:
         printf "GET /health-check HTTP/1.1\r\nhost: http://localhost:1848\r\nConnection: close\r\n\r\n" >&3
         grep -q "200 OK" <&3 || exit 1
       timeout: "10s"
-
-  # ########################################################################## #
-  # Stratum Server
-
-  chainweb-stratum-server:
-    container_name: chainweb-stratum-server
-    command:
-    # - "--public-key=${MINER_KEY:?MINER_KEY environment variable not set}"
-    - "--node=chainweb-node:1848"
-    - "--worker=stratum"
-    - "--thread-count=2"
-    - "--log-level=info"
-    - "--no-tls"
-    - "--stratum-port=1917"
-    - "--stratum-difficulty=46"
-    depends_on:
-      chainweb-node:
-        condition: service_healthy
-    entrypoint:
-    - /chainweb-mining-client/chainweb-mining-client
-    image: ghcr.io/kadena-io/chainweb-mining-client:latest
-    ports:
-    - protocol: tcp
-      published: 1917
-      target: 1917
-    restart: unless-stopped
 
   # ########################################################################## #
   # Container Monitor

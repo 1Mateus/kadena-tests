@@ -10,7 +10,7 @@ services:
 
   # ########################################################################## #
   # Database Initialization
-
+  # docker compose --profile initialize-db run chainweb-initialize-db
   chainweb-initialize-db:
     container_name: chainweb-initialize-db
     image: larsk/rsync
@@ -149,6 +149,7 @@ services:
       EOF
 
   # Shut down chainweb-node before running this.
+  # docker compose --profile validate-db run chainweb-validate-db
   chainweb-validate-db:
     container_name: chainweb-validate-db
     restart: "no"
@@ -226,6 +227,7 @@ services:
     - -H1G
     - -A64M
     - -RTS
+    - --header-stream
     - --database-directory=/chainweb/db
     - --chainweb-version=${KADENA_NETWORK:-mainnet01}
     - --log-level=warn
