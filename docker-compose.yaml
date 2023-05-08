@@ -171,8 +171,8 @@ services:
     - --prune-chain-database=none
     - --database-directory=/chainweb/db
     - --chainweb-version=${NETWORK:-mainnet01}
-    - --enable-mining-coordination
-    - --mining-public-key=${MINER_KEY:?MINER_KEY environment variable not set}
+    # - --enable-mining-coordination
+    # - --mining-public-key=${MINER_KEY:?MINER_KEY environment variable not set}
     - --log-level=warn
     - --log-handle=stderr
     - --telemetry-log-handle=stderr
