@@ -10,7 +10,6 @@ services:
 
   # ########################################################################## #
   # Database Initialization
-  # docker compose --profile initialize-db run chainweb-initialize-db
   chainweb-initialize-db:
     container_name: chainweb-initialize-db
     image: larsk/rsync
@@ -102,6 +101,10 @@ services:
       cat > /config/chainweb-validate-db-config.yaml <<EOF
       databaseDirectory: /chainweb/db
       chainweb:
+        allowReadsInLocal: true
+        headerStream: true
+        throttling:
+          global: 1000
         version: ${KADENA_NETWORK}
         onlySyncPact: true
         validateHashesOnReplay: true
@@ -149,7 +152,6 @@ services:
       EOF
 
   # Shut down chainweb-node before running this.
-  # docker compose --profile validate-db run chainweb-validate-db
   chainweb-validate-db:
     container_name: chainweb-validate-db
     restart: "no"
