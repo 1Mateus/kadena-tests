@@ -200,7 +200,7 @@ services:
   chainweb-stratum-server:
     container_name: chainweb-stratum-server
     command:
-    - "--public-key=${MINER_KEY:?MINER_KEY environment variable not set}"
+    # - "--public-key=${MINER_KEY:?MINER_KEY environment variable not set}"
     - "--node=chainweb-node:1848"
     - "--worker=stratum"
     - "--thread-count=2"
