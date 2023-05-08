@@ -1,7 +1,5 @@
 version: '3.9'
 
-# For usage instructions please take a look at the README.md file.
-
 volumes:
   chainweb-config: {}
   chainweb-db: {}
@@ -10,32 +8,19 @@ services:
 
   # ########################################################################## #
   # Database Initialization
-  chainweb-initialize-db:
-    container_name: chainweb-initialize-db
+  chainweb-initialize-db-sync:
+    container_name: chainweb-initialize-db-sync
     image: larsk/rsync
     profiles:
     - initialize-db
     volumes:
     - chainweb-db:/db:rw
     environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
       SERVER: ${DB_SYNC_SERVER:-us-w1.chainweb.com}
     entrypoint: "/bin/sh"
     command:
     - "-c"
     - |
-      case "$$KADENA_NETWORK" in
-        mainnet01)
-          echo "SERVER=$${SERVER:=us-w1.chainweb.com}"
-          ;;
-        testnet04)
-          echo "SERVER=$${SERVER:=us1.testnet.chainweb.com}"
-          ;;
-        *)
-          echo "unknown or unsupported chainweb version: $$KADENA_NETWORK" 1>&2
-          exit 1
-      esac
-
       mkdir -p "/db/0"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
@@ -43,63 +28,26 @@ services:
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
 
   # ########################################################################## #
-  # Database Validation
-
-  # Optional (can be used instead of chainweb-db-initialize
-  # Shut down chainweb-node before running this.
-  chainweb-valiate-db-sync:
-    container_name: chainweb-validate-db-sync
-    image: larsk/rsync
-    profiles:
-    - validate-db
-    volumes:
-    - chainweb-db:/db:rw
-    environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
-      SERVER: ${DB_SYNC_SERVER:-us-w1.chainweb.com}
-    entrypoint: "/bin/sh"
-    command:
-    - "-c"
-    - |
-      case "$$KADENA_NETWORK" in
-        mainnet01)
-          echo "SERVER=$${SERVER:=us-w1.chainweb.com}"
-          ;;
-        testnet04)
-          echo "SERVER=$${SERVER:=us1.testnet.chainweb.com}"
-          ;;
-        *)
-          echo "unknown or unsupported chainweb version: $$KADENA_NETWORK" 1>&2
-          exit 1
-      esac
-
-      mkdir -p "/db/0"
-      rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
-      rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
-      rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
-      rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
-
-  chainweb-validate-db-config:
-    container_name: chainweb-validate-db-config
+  chainweb-initialize-db-config:
+    container_name: chainweb-initialize-db-config
     image: alpine:latest
-    environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
     volumes:
     - chainweb-config:/config:rw
     entrypoint: "/bin/sh"
     profiles:
-    - validate-db
+    - initialize-db
     command:
     - "-c"
     - |
-      cat > /config/chainweb-validate-db-config.yaml <<EOF
+      cat > /config/chainweb-initialize-db-config.yaml <<EOF
       databaseDirectory: /chainweb/db
       chainweb:
-        version: ${KADENA_NETWORK}
         allowReadsInLocal: true
         headerStream: true
         throttling:
           global: 1000
+        onlySyncPact: true
+        validateHashesOnReplay: true
         p2p:
           peer:
             interface: localhost
@@ -120,15 +68,12 @@ services:
             handle: stdout
             color: auto
             format: text
-
         backend:
           handle: stdout
           color: auto
           format: text
-
         logger:
           log_level: info
-
         filter:
           rules:
             - key: component
@@ -149,48 +94,44 @@ services:
           default: error
       EOF
 
-  # Shut down chainweb-node before running this.
-  chainweb-validate-db:
-    container_name: chainweb-validate-db
+  # ########################################################################## #
+  chainweb-initialize-db:
+    container_name: chainweb-initialize-db
     restart: "no"
-    image: ${IMAGE:-ghcr.io/kadena-io/chainweb-node/ubuntu:latest}
-    environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
+    image: ghcr.io/kadena-io/chainweb-node/ubuntu:latest
     stop_signal: SIGINT
     profiles:
-    - validate-db
+    - initialize-db
     ulimits:
       nofile:
         soft: 65535
         hard: 65535
     depends_on:
-      chainweb-validate-db-config:
+      chainweb-initialize-db-sync:
+        condition: "service_completed_successfully"
+      chainweb-initialize-db-config:
         condition: "service_completed_successfully"
     volumes:
     - chainweb-db:/chainweb/db:rw
     - chainweb-config:/config:ro
-    entrypoint: /bin/bash
+    entrypoint:
+    - /chainweb/chainweb-node
     command:
-    - "-c"
-    - |
-      [ -d "/chainweb/db/0/rocksDb" ] || { echo "missing database. Try running chainweb-validate-db-sync first" 1>&2; exit 1; }
-      rm -rf "/db/0/sqlite/*"
-      /chainweb/chainweb-node \
-        +RTS \
-        -T \
-        -H1G \
-        -RTS \
-        --config-file=/config/chainweb-validate-db-config.yaml \
-        --log-handle=stderr
+    - +RTS
+    - -T
+    - -H1G
+    - -A64M
+    - -RTS
+    - --config-file=/config/chainweb-initialize-db-config.yaml
+    - --chainweb-version=${NETWORK:-mainnet01}
+    - --log-handle=stderr
 
   # ########################################################################## #
   # Chainweb Node
 
   chainweb-node:
     container_name: chainweb-node
-    image: ${IMAGE:-ghcr.io/kadena-io/chainweb-node/ubuntu:latest}
-    environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
+    image: ghcr.io/kadena-io/chainweb-node/ubuntu:latest
     restart: unless-stopped
     stop_grace_period: "20s"
     stop_signal: SIGINT
@@ -201,11 +142,11 @@ services:
     ports:
     - mode: host
       protocol: tcp
-      published: ${P2P_PORT:-1789}
+      published: 1789
       target: 1789
     - mode: host
       protocol: tcp
-      published: ${SERVICE_PORT:-1848}
+      published: 1848
       target: 1848
     volumes:
     - chainweb-db:/chainweb/db:rw
@@ -224,15 +165,17 @@ services:
     - +RTS
     - -T
     - -H1G
+    - -A64M
     - -RTS
     - --header-stream
+    - --prune-chain-database=none
     - --database-directory=/chainweb/db
-    - --chainweb-version=${KADENA_NETWORK:-mainnet01}
+    - --chainweb-version=${NETWORK:-mainnet01}
+    - --enable-mining-coordination
+    - --mining-public-key=${MINER_KEY:?MINER_KEY environment variable not set}
     - --log-level=warn
-    - --log-handle=stdout
-    - --log-format=json
+    - --log-handle=stderr
     - --telemetry-log-handle=stderr
-    - --telemetry-log-format=json
     - --p2p-port=1789
     healthcheck:
       interval: "1m"
@@ -250,6 +193,32 @@ services:
         printf "GET /health-check HTTP/1.1\r\nhost: http://localhost:1848\r\nConnection: close\r\n\r\n" >&3
         grep -q "200 OK" <&3 || exit 1
       timeout: "10s"
+
+  # ########################################################################## #
+  # Stratum Server
+
+  chainweb-stratum-server:
+    container_name: chainweb-stratum-server
+    command:
+    - "--public-key=${MINER_KEY:?MINER_KEY environment variable not set}"
+    - "--node=chainweb-node:1848"
+    - "--worker=stratum"
+    - "--thread-count=2"
+    - "--log-level=info"
+    - "--no-tls"
+    - "--stratum-port=1917"
+    - "--stratum-difficulty=46"
+    depends_on:
+      chainweb-node:
+        condition: service_healthy
+    entrypoint:
+    - /chainweb-mining-client/chainweb-mining-client
+    image: ghcr.io/kadena-io/chainweb-mining-client:latest
+    ports:
+    - protocol: tcp
+      published: 1917
+      target: 1917
+    restart: unless-stopped
 
   # ########################################################################## #
   # Container Monitor
@@ -320,5 +289,7 @@ services:
     image: alpine:latest
     entrypoint:
     - /bin/sh
+    volumes:
+    - chainweb-db:/db:ro
     profiles:
     - debug
