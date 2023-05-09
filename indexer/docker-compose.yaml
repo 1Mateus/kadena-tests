@@ -95,6 +95,22 @@ services:
       cat > /config/chainweb-validate-db-config.yaml <<EOF
       databaseDirectory: /chainweb/db
       chainweb:
+        version: ${KADENA_NETWORK}
+        onlySyncPact: true
+        validateHashesOnReplay: true
+        p2p:
+          peer:
+            interface: localhost
+            hostaddress:
+              port: 4445
+          private: true
+          ignoreBootstrapNodes: true
+        transactionIndex:
+          enabled: false
+        mempoolP2p:
+          enabled: false
+        cuts:
+          pruneChainDatabase: headers-checked
         allowReadsInLocal: true
         headerStream: true
         throttling:
@@ -137,11 +153,9 @@ services:
 
   # Shut down chainweb-node before running this.
   chainweb-validate-db:
-    container_name: chainweb-validate-db
+    container_name: chainweb-initialize-db
     restart: "no"
-    image: ${IMAGE:-ghcr.io/kadena-io/chainweb-node/ubuntu:latest}
-    environment:
-      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
+    image: ghcr.io/kadena-io/chainweb-node/ubuntu:latest
     stop_signal: SIGINT
     profiles:
     - validate-db
@@ -150,25 +164,25 @@ services:
         soft: 65535
         hard: 65535
     depends_on:
-      chainweb-validate-db-config:
+      chainweb-initialize-db-sync:
+        condition: "service_completed_successfully"
+      chainweb-initialize-db-config:
         condition: "service_completed_successfully"
     volumes:
-    - chainweb-db:/chainweb/db:rw
-    - chainweb-config:/config:ro
-    entrypoint: /bin/bash
+      - chainweb-db:/chainweb/db:rw
+      - chainweb-config:/config:ro
+    entrypoint:
+      - /chainweb/chainweb-node
     command:
-    - "-c"
-    - |
-      [ -d "/chainweb/db/0/rocksDb" ] || { echo "missing database. Try running chainweb-validate-db-sync first" 1>&2; exit 1; }
-      rm -rf "/db/0/sqlite/*"
-      /chainweb/chainweb-node \
-        +RTS \
-        -T \
-        -H1G \
-        -A64M \
-        -RTS \
-        --config-file=/config/chainweb-validate-db-config.yaml \
-        --log-handle=stderr
+      - +RTS
+      - -T
+      - -H1G
+      - -A64M
+      - -RTS
+      - --config-file=/config/chainweb-initialize-db-config.yaml
+      - --chainweb-version=${NETWORK:-mainnet01}
+      - --log-handle=stderr
+
 
   # ########################################################################## #
   # Chainweb Node
