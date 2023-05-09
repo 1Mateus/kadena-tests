@@ -41,12 +41,6 @@ services:
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
-      for i in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 ; do
-        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
-        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
-        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
-        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
-      done
 
   # ########################################################################## #
   # Database Validation
@@ -105,50 +99,40 @@ services:
         headerStream: true
         throttling:
           global: 1000
-        version: ${KADENA_NETWORK}
-        onlySyncPact: true
-        validateHashesOnReplay: true
-        p2p:
-          peer:
-            interface: localhost
-            hostaddress:
-              port: 4445
-          private: true
-          ignoreBootstrapNodes: true
-        transactionIndex:
-          enabled: false
-        mempoolP2p:
-          enabled: false
-        cuts:
-          pruneChainDatabase: headers-checked
       logging:
         telemetryBackend:
-          enabled: false
+          enabled: true
           configuration:
-            color: 'true'
+            handle: stdout
+            color: auto
+            format: text
+
         backend:
-          color: 'true'
+          handle: stdout
+          color: auto
+          format: text
+
+        logger:
+          log_level: info
+
         filter:
           rules:
-          - value: mempool
-            key: component
-            level: warn
-          - value: connection-manager
-            key: component
-            level: warn
-          - value: sync
-            key: sub-component
-            level: warn
-          - value: MempoolAccess
-            key: sub-component
-            level: warn
-          - value: PactService
-            key: logger
-            level: warn
-          - value: Checkpointer
-            key: logger
-            level: warn
-          default: info
+            - key: component
+              value: cut-monitor
+              level: info
+            - key: component
+              value: pact-tx-replay
+              level: info
+            - key: component
+              value: connection-manager
+              level: info
+            - key: component
+              value: miner
+              level: info
+            - key: component
+              value: local-handler
+              level: info
+          default: error
       EOF
 
   # Shut down chainweb-node before running this.
