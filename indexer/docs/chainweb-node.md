@@ -1,4 +1,4 @@
-Usage
+Node Usage
 =====
 
 Hardware requirements:
