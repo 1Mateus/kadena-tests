@@ -41,6 +41,12 @@ services:
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
       rsync -avz --delete "rsync://$${SERVER}/db/0/rocksDb" "/db/0/"
+      for i in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 ; do
+        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
+        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
+        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
+        rsync -avz --delete "rsync://$${SERVER}/db/0/sqlite/pact-v1-chain-$${i}.*" "/db/0/sqlite/"
+      done
 
   # ########################################################################## #
   # Database Validation
@@ -95,6 +101,10 @@ services:
       cat > /config/chainweb-validate-db-config.yaml <<EOF
       databaseDirectory: /chainweb/db
       chainweb:
+        allowReadsInLocal: true
+        headerStream: true
+        throttling:
+          global: 1000
         version: ${KADENA_NETWORK}
         onlySyncPact: true
         validateHashesOnReplay: true
@@ -111,10 +121,6 @@ services:
           enabled: false
         cuts:
           pruneChainDatabase: headers-checked
-        allowReadsInLocal: true
-        headerStream: true
-        throttling:
-          global: 1000
       logging:
         telemetryBackend:
           enabled: true
@@ -153,9 +159,11 @@ services:
 
   # Shut down chainweb-node before running this.
   chainweb-validate-db:
-    container_name: chainweb-initialize-db
+    container_name: chainweb-validate-db
     restart: "no"
-    image: ghcr.io/kadena-io/chainweb-node/ubuntu:latest
+    image: ${IMAGE:-ghcr.io/kadena-io/chainweb-node/ubuntu:latest}
+    environment:
+      KADENA_NETWORK: ${KADENA_NETWORK:-mainnet01}
     stop_signal: SIGINT
     profiles:
     - validate-db
@@ -164,25 +172,25 @@ services:
         soft: 65535
         hard: 65535
     depends_on:
-      chainweb-initialize-db-sync:
-        condition: "service_completed_successfully"
-      chainweb-initialize-db-config:
+      chainweb-validate-db-config:
         condition: "service_completed_successfully"
     volumes:
-      - chainweb-db:/chainweb/db:rw
-      - chainweb-config:/config:ro
-    entrypoint:
-      - /chainweb/chainweb-node
+    - chainweb-db:/chainweb/db:rw
+    - chainweb-config:/config:ro
+    entrypoint: /bin/bash
     command:
-      - +RTS
-      - -T
-      - -H1G
-      - -A64M
-      - -RTS
-      - --config-file=/config/chainweb-initialize-db-config.yaml
-      - --chainweb-version=${NETWORK:-mainnet01}
-      - --log-handle=stderr
-
+    - "-c"
+    - |
+      [ -d "/chainweb/db/0/rocksDb" ] || { echo "missing database. Try running chainweb-validate-db-sync first" 1>&2; exit 1; }
+      rm -rf "/db/0/sqlite/*"
+      /chainweb/chainweb-node \
+        +RTS \
+        -T \
+        -H1G \
+        -A64M \
+        -RTS \
+        --config-file=/config/chainweb-validate-db-config.yaml \
+        --log-handle=stderr
 
   # ########################################################################## #
   # Chainweb Node
